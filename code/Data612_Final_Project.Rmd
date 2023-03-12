@@ -1,0 +1,359 @@
+---
+title: "Untitled"
+author: "Venkata Dhanush Kikkisetti & Druv Jain"
+date: "2022-10-31"
+output: github_document
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+```{r}
+powerplant<-read_csv('/Users/dhanushkikkisetti/Documents/Data_612/Data 612 project/globalpowerplantdatabasev120/global_power_plant_database.csv')
+problems()
+powerplant[5504:5510,]
+```
+
+# Data cleaning 
+```{r}
+powerplant<-powerplant%>%
+  separate(wepp_id,
+           into = c('wepp_id1','wepp_id2','wepp_id3'),
+           sep = '|')
+powerplant%>%
+  summarise(across(everything(),~sum(is.na(.))))
+powerplant%>%
+  summarise(count(distinct(.)),total=nrow(powerplant))
+str(powerplant)
+powerplant<-powerplant%>%
+  select(-url)
+```
+# Some basic working on data and creating some summarizations
+```{r}
+powerplant%>%
+ filter(!is.na(generation_gwh_2013)==TRUE)%>%
+  ggplot(mapping = aes(x=capacity_mw,y=generation_gwh_2013))+
+  geom_point()
+  
+powerplant%>%
+ filter(!is.na(generation_gwh_2014)==TRUE)%>%
+  ggplot(mapping = aes(x=capacity_mw,y=generation_gwh_2014))+
+  geom_point()
+```
+
+
+
+# Some basic summary of data
+```{r}
+unique(powerplant$year_of_capacity_data)
+powerplant%>%
+  filter(!is.na(year_of_capacity_data))%>%
+  group_by(year_of_capacity_data)%>%
+  summarise(n=n(),total=mean(capacity_mw))
+# Total number of geographical data we have.
+powerplant%>%
+  filter(!is.na(geolocation_source)==TRUE)%>%
+  group_by(geolocation_source)%>%
+  summarise(n=n())
+# Estimated Power Generation for each country
+powerplant%>%
+  filter(!is.na(estimated_generation_gwh))%>%
+  group_by(country_long)%>%
+  summarise(n=n(),average=mean(estimated_generation_gwh))%>%
+  arrange(average)
+```
+
+
+# Creating new dataframe that we use for coming code chunk
+
+```{r}
+powerplant%>%
+  select(country,country_long,primary_fuel,generation_gwh_2013:estimated_generation_gwh)->powerplant_new1
+
+powerplant_new%>%
+  summarise(across(everything(),~sum(is.na(.))))
+```
+
+# 1) Choosing a particular country and analyzing what type of powerplant has more electricity generation
+
+```{r}
+powerplant%>%
+  group_by(country,primary_fuel)%>%
+  summarise(Total_plants=n(),
+            current_generated_2013=sum(generation_gwh_2013,na.rm = TRUE),
+            current_generated_2014=sum(generation_gwh_2014,na.rm = TRUE),
+            current_generated_2015=sum(generation_gwh_2015,na.rm = TRUE),
+            current_generated_2016=sum(generation_gwh_2016,na.rm = TRUE),
+            current_generated_2017=sum(generation_gwh_2017,na.rm = TRUE))%>%
+            arrange(desc(Total_plants))
+options(scipen=3)
+# For the Country USA
+powerplant_new1%>%
+  filter(country=='USA')%>%
+  group_by(primary_fuel)%>%
+  summarise(total_power=sum(power_generation))%>%
+  mutate(primary_fuel=fct_reorder(primary_fuel,total_power))%>%
+  ggplot(mapping = aes(x=primary_fuel,y=total_power))+
+  geom_col()+
+  labs(
+    x="Primary_fuel",
+    y="Total electricity genenration",
+    title="Total power generation for different fossel fuels in USA"
+  )+
+  theme_bw()
+
+# This is for all Countries
+powerplant_new1%>%
+  group_by(country_long,primary_fuel)%>%
+  summarise(total_power=sum(power_generation))%>%
+  mutate(primary_fuel=fct_reorder(primary_fuel,total_power))%>%
+  ggplot(mapping = aes(x=primary_fuel,y=log(total_power)))+
+  geom_col()+
+  labs(
+    x="Primary_fuel",
+    y="Total electricity genenration",
+    title="Total power generation for different fossel fuels"
+  )+
+  facet_wrap(~country_long)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=90, hjust=1)) 
+```
+# 2) Analyzing which type of powerplant has more electricity generation for which year and doing a little research on it  
+
+```{r}
+#For summarisation table
+powerplant%>%
+  group_by(primary_fuel)%>%
+  summarise(Total_plants=n(),
+            current_generated_2013=sum(generation_gwh_2013,na.rm = TRUE),
+            current_generated_2014=sum(generation_gwh_2014,na.rm = TRUE),
+            current_generated_2015=sum(generation_gwh_2015,na.rm = TRUE),
+            current_generated_2016=sum(generation_gwh_2016,na.rm = TRUE),
+            current_generated_2017=sum(generation_gwh_2017,na.rm = TRUE))%>%
+  arrange(desc(Total_plants))
+
+#For Data Visualization
+powerplant_new1%>%
+  group_by(primary_fuel,Years)%>%
+  filter(primary_fuel!="Storage"&&primary_fuel!="Other")%>%
+  summarise(Total_power_generation=sum(power_generation))%>%
+  ggplot(mapping = aes(x=Years,y=sqrt(Total_power_generation)))+
+  geom_col()+
+  facet_wrap(~primary_fuel)+
+  theme_bw()+
+  labs(
+    x="Sqrt transformation of power generation in gigawatts",
+    y="Years",
+    title="Power geeration for each year with respective to country"
+  )
+```
+
+# 3) Total number of plants for each fuel
+```{r}
+powerplant%>%
+  group_by(primary_fuel)%>%
+  summarise(Total_plants=n())%>%
+  mutate(primary_fuel=fct_reorder(primary_fuel,Total_plants))%>%
+ggplot(mapping = aes(x=primary_fuel,y=Total_plants))+
+  geom_col(fill="orange")+
+  theme_bw()+
+  labs(
+    x="Primary Fuel",
+    y="Total power plants",
+    title = "Total power plants for each fuel in the world "
+  )
+```
+4) Analyzing if there is a difference in generated electricity and estimated electricity with respect to the country
+
+```{r}
+powerplant_new1%>%
+  filter(!is.na(estimated_generation_gwh))%>%
+  group_by(country_long)%>%
+  summarise(Total_power_generation=sum(power_generation),
+            Estimated_power_generation=sum(estimated_generation_gwh))
+  
+```
+
+
+# 5)Effect of power plant type in generating electricity.  
+```{r}
+#Visualization for just only one year
+powerplant%>%
+  group_by(primary_fuel)%>%
+  summarise(Total_plants=n(),
+            current_generated_2013=sum(generation_gwh_2013,na.rm = TRUE),
+            current_generated_2014=sum(generation_gwh_2014,na.rm = TRUE),
+            current_generated_2015=sum(generation_gwh_2015,na.rm = TRUE),
+            current_generated_2016=sum(generation_gwh_2016,na.rm = TRUE),
+            current_generated_2017=sum(generation_gwh_2017,na.rm = TRUE))%>%
+  mutate(primary_fuel=fct_reorder(primary_fuel,current_generated_2013))%>%
+  ggplot(mapping = aes(x=primary_fuel,y=current_generated_2017))+
+  geom_col()+
+  theme_bw()
+
+# Visualization for all years
+
+powerplant_new1%>%
+  group_by(primary_fuel)%>%
+  summarise(Total_power=sum(power_generation))%>%
+  mutate(primary_fuel=fct_reorder(primary_fuel,Total_power))%>%
+  ggplot(mapping = aes(x=primary_fuel,y=Total_power))+
+  geom_col(fill="orange")+
+  theme_bw()+
+  labs(
+    x="Primary Fuel",
+    y="Total power generated ",
+    title = "Total Electricity generated by each fuel in the world "
+  )
+```
+# 6) Which geolocation_source has higher estimated power generation.
+
+```{r}
+powerplant%>%
+  filter(!is.na(geolocation_source))%>%
+  group_by(geolocation_source)%>%
+  summarise(Estimatepower=mean(estimated_generation_gwh,na.rm=TRUE))%>%
+  arrange(desc(Estimatepower))%>%
+  ggplot(mapping = aes(x=geolocation_source,y=Estimatepower))+
+  geom_col()
+```
+#7) Total power generation for each year with respect to country and top countries with highest power generation
+```{r}
+powerplant%>%
+  select(country,generation_gwh_2013,generation_gwh_2014,generation_gwh_2015,generation_gwh_2016,generation_gwh_2017,estimated_generation_gwh)->powerplant2
+
+powerplant2%>%
+  pivot_longer(cols = generation_gwh_2013:generation_gwh_2017,
+               names_to = c("Years"),
+               values_to = c("power_generation")
+               )%>%
+  mutate(Years=str_replace_all(Years,"generation_gwh_",' '))%>%
+  filter(!is.na(power_generation))->powerplant2
+
+powerplant2%>%
+  group_by(country,Years)%>%
+  summarise(Total_power_generation=sum(power_generation))->new
+ggplot(data=new,mapping = aes(x=Years,y=log(Total_power_generation)))+
+  geom_point()+
+  facet_wrap(~country)+
+    labs(
+      x="Total Years",
+      y="Total power generation ",
+      title = "Total power generation for each year with respective to countriy"
+    )
+
+powerplant2%>%
+  group_by(country)%>%
+  summarise(Total_power_generation=sum(power_generation))%>%
+  arrange(desc(Total_power_generation))
+```
+
+
+
+
+#8) Estimated vs Actual power generation with respective to primary fuel
+
+```{r}
+options(scipen = 10)
+powerplant_new1%>%
+  filter(!is.na(estimated_generation_gwh))%>%
+  ggplot(mapping=aes(x=sqrt(estimated_generation_gwh),y=sqrt(power_generation)))+
+  geom_point()+
+  labs(
+    x="Estimated Generation",
+    y="actual power generation"
+  )+
+  facet_wrap(~primary_fuel)+
+  theme_bw()
+```
+
+# Using statistical method lets perform statistical tests if current generation increase with increase in years.
+## some summary stats for the data set
+```{r}
+powerplant_new1 %>%
+  group_by(Years) %>%
+  summarise(Total_power_plants = n(), Average = mean(power_generation), Median = median(power_generation),
+            SD = sd(power_generation),  IQR = IQR(power_generation)) %>%
+  knitr::kable(digits = 2)
+```
+
+## Explantory Data Analysis
+# checking for normality
+```{r}
+ggplot(data=powerplant_new,mapping = aes(x=power_generation))+
+  geom_histogram()+
+  labs(
+    x='power_generation',y='frequency'
+  )+
+  theme_bw()
+```
+# power generation from year 2013 to 2017 is increased but average generation is decreased
+```{r}
+powerplant_new%>%
+  ggplot(mapping = aes(x=Years,y=power_generation))+
+  geom_col(aes(fill=Years),show.legend = FALSE)+
+  labs (title = "Power Generation from year 2013-2017",
+        y = "Power generation in gigawatts", x = "Years of generation")
+```
+# Some Transformations of data which are required for statistical test
+```{r}
+powerplant_new%>%
+  mutate(log_generation=log(power_generation),Years=as.factor(Years))->powerplant_new
+powerplant_new%>%
+  filter(!is.infinite(log_generation))->powerplant_new
+
+powerplant_new%>%
+  summarise(across(everything(),~sum(is.na(.))))
+glimpse(powerplant_new)
+```
+
+# Histogram of generation of gwh to check if the data is normally distributed
+```{r}
+ggplot(data=powerplant_new,mapping = aes(x=log_generation))+
+  geom_histogram()+
+  labs(
+    x='logpower_generation',y='frequency'
+  )+
+  theme_bw()
+```
+
+# Some visualisations
+```{r}
+powerplant_new%>%
+  ggplot(mapping = aes(x=Years,y=log_generation))+
+  geom_boxplot(aes(fill=Years),show.legend = FALSE)+
+  coord_flip()+
+  labs (title = "Log Power Generation from year 2013-2017",
+        y = "Log Power generation in gigawatts", x = "Years of generation")
+```
+
+```{r}
+powerplant_new%>%
+  group_by(Years)%>%
+  summarise(Total_Average=mean(power_generation))%>%
+  ggplot(mapping = aes(x=Years,y=Total_Average))+
+  geom_col(color='red')+
+  theme_bw()+
+  ylab("Total Average of current generation")
+```
+
+## we can see that data is normally distrubuted and now we can perform anova test considering
+Initial Hypothesis as power generation is same for all the years.
+Alternative Hypothesis as atleast one year power generation is different 
+
+performing anova by testing equality of mean of power generation by years
+```{r}
+powerplant_new%>%
+  filter(is.nan(log_generation))
+anova_model<-aov(log_generation~Years,data=powerplant_new)
+anova(anova_model)
+```
+
+```{r}
+PostHocTest(anova_model, method = "lsd") 
+```
+
+
